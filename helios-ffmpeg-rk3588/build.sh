@@ -66,7 +66,7 @@ echo "Libs.private: -lstdc++" >>"$DEPS/lib/pkgconfig/rockchip_mpp.pc"
 
 echo "== librga $RGA_COMMIT (static)"
 sed -i 's/shared_library/library/g' "$SRC/rga/meson.build"
-CXXFLAGS="$CXXFLAGS -fpermissive" meson setup --quiet "$WORK/rga" "$SRC/rga" \
+CXXFLAGS="$CXXFLAGS -fpermissive" meson setup "$WORK/rga" "$SRC/rga" \
     --prefix="$DEPS" --libdir=lib --buildtype=plain --default-library=static \
     -Dlibdrm=false -Dlibrga_demo=false >/dev/null
 ninja -C "$WORK/rga" -j "$JOBS" install >/dev/null
