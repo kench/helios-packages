@@ -1,0 +1,149 @@
+# Publishes one package to helios-packages' suite of the Helios APT repository (helios-cloud's
+# AptRepository stack) when its release tag is pushed: <package>/<version>, for example
+# helios-srtla-send/4.1.0-1, where <package> is a folder with package.env and build.sh.
+#
+# Needs, in this repository's settings:
+#   secrets.APT_SIGNING_KEY             armored private GPG key for this suite (no passphrase)
+#   vars.APT_BUCKET                     helios-cloud output AptBucketName
+#   vars.APT_DISTRIBUTION_ID            helios-cloud output AptDistributionId
+#   vars.APT_PACKAGES_PUBLISHER_ROLE_ARN helios-cloud output AptPackagesPublisherRoleArn
+# The publisher role trusts only this repository's <package>/<version> tags and may only write
+# pool/trixie/, dists/trixie/ and keys/helios-packages-archive-keyring.asc.
+name: Release
+
+on:
+  push:
+    tags: ["*/*"]
+
+permissions:
+  contents: read
+
+# One release at a time: publishing rewrites the suite's indices.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+  ZIG_VERSION: 0.14.1
+  CARGO_ZIGBUILD_VERSION: 0.24.1
+
+jobs:
+  build:
+    name: Build the package
+    runs-on: ubuntu-24.04
+    outputs:
+      package: ${{ steps.tag.outputs.package }}
+      suite: ${{ steps.tag.outputs.suite }}
+      component: ${{ steps.tag.outputs.component }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag
+        id: tag
+        run: |
+          package=${GITHUB_REF_NAME%%/*}
+          version=${GITHUB_REF_NAME#*/}
+          if [ ! -f "$package/package.env" ] || [ ! -x "$package/build.sh" ]; then
+            echo "::error::no package folder $package with package.env and build.sh"
+            exit 1
+          fi
+          . "$package/package.env"
+          if [ "$NAME" != "$package" ] || [ "$VERSION" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME doesn't match $package/package.env ($NAME $VERSION)"
+            exit 1
+          fi
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME isn't on main"
+            exit 1
+          fi
+          {
+            echo "package=$package"
+            echo "suite=$SUITE"
+            echo "component=$COMPONENT"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Install zig and cargo-zigbuild
+        run: |
+          python3 -m pip install --user "ziglang==$ZIG_VERSION"
+          cargo install --locked cargo-zigbuild --version "$CARGO_ZIGBUILD_VERSION"
+
+      - name: Build
+        run: ./${{ steps.tag.outputs.package }}/build.sh out
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: deb
+          path: out/*.deb
+          if-no-files-found: error
+
+  publish:
+    name: Publish to the APT repository
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SUITE: ${{ needs.build.outputs.suite }}
+      COMPONENT: ${{ needs.build.outputs.component }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download the package
+        uses: actions/download-artifact@v7
+        with:
+          name: deb
+          path: dist-deb
+
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.APT_PACKAGES_PUBLISHER_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Import the signing key
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --import
+          key=$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          echo "KEY_ID=$key" >>"$GITHUB_ENV"
+
+      - name: Fetch the published packages
+        run: aws s3 sync --only-show-errors "s3://${{ vars.APT_BUCKET }}/pool/$SUITE" "repo/pool/$SUITE"
+
+      - name: Build and sign the suite
+        run: .github/scripts/build-apt-repo.sh repo "$KEY_ID" "$SUITE" "$COMPONENT" dist-deb/*.deb
+
+      # Packages first and InRelease last, so a device updating meanwhile sees either the old
+      # release or the complete new one.
+      - name: Upload
+        env:
+          BUCKET: ${{ vars.APT_BUCKET }}
+        run: |
+          cd repo
+          for deb in ../dist-deb/*.deb; do
+            package=$(dpkg-deb -f "$deb" Package)
+            dir=pool/$SUITE/$COMPONENT/$(printf '%.1s' "$package")/$package
+            aws s3 cp --only-show-errors "$dir/$(basename "$deb")" "s3://$BUCKET/$dir/"
+          done
+          for dir in dists/"$SUITE"/*/; do
+            aws s3 cp --only-show-errors --recursive "$dir" "s3://$BUCKET/$dir"
+          done
+          aws s3 cp --only-show-errors keys/helios-packages-archive-keyring.asc "s3://$BUCKET/keys/"
+          for file in Release Release.gpg InRelease; do
+            aws s3 cp --only-show-errors "dists/$SUITE/$file" "s3://$BUCKET/dists/$SUITE/$file"
+          done
+
+      - name: Invalidate the indices
+        run: |
+          aws cloudfront create-invalidation --distribution-id "${{ vars.APT_DISTRIBUTION_ID }}" \
+            --paths "/dists/$SUITE/*" '/keys/helios-packages-archive-keyring.asc' \
+            --query Invalidation.Id --output text

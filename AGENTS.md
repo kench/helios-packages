@@ -8,7 +8,14 @@ Project Status and Handoff"; the boards are in "Hardware Deployment Information"
 
 ## Status (2026-11-21)
 
-Repository created with the plan only; nothing is packaged yet. Next:
+- `helios-srtla-send` (irlserver srtla_send 4.1.0, MIT) is packaged: `helios-srtla-send/build.sh`.
+- Publishing works end to end in local tests: `.github/workflows/release.yml` on tags
+  `<package>/<version>`, `.github/scripts/build-apt-repo.sh` for the `trixie` suite, signed with
+  this repository's own key (`APT_SIGNING_KEY`, fingerprint
+  `328F19E1F0AAA7B143E1017F7135FAE9F8FE4181`). It needs helios-cloud's
+  `helios-packages-publisher` role deployed; the repository variables are set.
+
+Next:
 
 1. `helios-ffmpeg-rpi5`: bring over the cross-build from kench/raspberry-pi-5-tools (FFmpeg
    9.0.2 with the Raspberry Pi patches, x264, SRT), installed to `/usr/lib/helios-ffmpeg` with
@@ -16,12 +23,14 @@ Repository created with the plan only; nothing is packaged yet. Next:
 2. `helios-ffmpeg-rk3588`: FFmpeg with Rockchip MPP and RGA for the Orange Pi 5 Plus on Armbian
    Trixie with the vendor kernel (6.1). MPP and RGA aren't in Debian, so they're bundled or
    packaged here.
-3. `helios-srtla`: BELABOX srtla for arm64.
-4. A release workflow on per-package tags that publishes to the `trixie` suite, a component per
-   board (`rpi5`, `rk3588`, plus `main`), signed with the Helios APT archive key. That needs
-   helios-cloud's `helios-apt-publisher` role to trust this repository's tags (a helios-cloud
-   change and deploy, with the owner's OK), the `APT_SIGNING_KEY` secret here, and
-   kench/helios's `.github/scripts/build-apt-repo.sh` adapted to one suite and component.
+3. BELABOX srtla (`helios-srtla`) only if it's still wanted next to irlserver's sender.
+
+## Adding a package
+
+A folder named after the package with `package.env` (`NAME`, `VERSION`, the pinned upstream tag
+and commit, `SUITE`, `COMPONENT`, target) and an executable `build.sh [OUT_DIR]` that verifies
+the upstream commit, builds, checks the result and writes `<package>_<version>_<arch>.deb`. The
+release tag is `<package>/<version>`. Never publish a version twice with different contents.
 
 ## Targets
 
