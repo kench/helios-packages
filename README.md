@@ -10,6 +10,11 @@ next to the `helios` package itself.
 | `helios-ffmpeg-rk3588` | Orange Pi 5 Plus (Armbian Trixie, vendor kernel 6.1) | FFmpeg with Rockchip MPP encode/decode and RGA, libx264, libsrt |
 | `helios-srtla` | any arm64 | BELABOX srtla (`srtla_send`, `srtla_rec`) |
 
+## Status
+
+Plan only (2026-11-21); nothing is packaged yet. `AGENTS.md` lists the next steps for each
+package and what publishing needs.
+
 ## Plan
 
 - Each FFmpeg package installs to `/usr/lib/helios-ffmpeg/{bin,lib}` with an rpath, so it never
