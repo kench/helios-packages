@@ -61,3 +61,46 @@ jobs:
           echo "$scripts"
           # -x follows sourced files, such as each package's package.env.
           shellcheck -x --severity=style $scripts
+
+  # Packages whose folder changed in the PR, or all of them when the shared build changed.
+  changed:
+    name: Changed packages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.changed.outputs.packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: List them
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          all=$(for f in */package.env; do dirname "$f"; done)
+          if printf '%s\n' "$files" | grep -qE '^\.github/(scripts/build-package\.sh|workflows/build-package\.yml)$'; then
+            packages=$all
+          else
+            packages=$(for p in $all; do printf '%s\n' "$files" | grep -q "^$p/" && echo "$p"; done || true)
+          fi
+          json=$(printf '%s\n' $packages | python3 -c 'import json,sys;print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+          echo "packages: $json"
+          echo "packages=$json" >>"$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: changed
+    if: needs.changed.outputs.packages != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.changed.outputs.packages) }}
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: ${{ matrix.package }}

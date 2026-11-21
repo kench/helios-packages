@@ -1,0 +1,85 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nyanmisaka <nst799610810@gmail.com>
+Date: Sun, 21 Sep 2025 20:07:42 +0800
+Subject: [PATCH 09/19] Revert "lavfi/vf_hwupload: validate the hw device in
+ init"
+
+This reverts commit 036336296c5eccdbab2539342f0056d24d322752.
+---
+ libavfilter/vf_hwupload.c | 49 +++++++++++++++++----------------------
+ 1 file changed, 21 insertions(+), 28 deletions(-)
+
+diff --git a/libavfilter/vf_hwupload.c b/libavfilter/vf_hwupload.c
+index 8d994d22e1..914b587561 100644
+--- a/libavfilter/vf_hwupload.c
++++ b/libavfilter/vf_hwupload.c
+@@ -39,33 +39,6 @@ typedef struct HWUploadContext {
+     char *device_type;
+ } HWUploadContext;
+ 
+-static int hwupload_init(AVFilterContext *avctx)
+-{
+-    HWUploadContext *ctx = avctx->priv;
+-    int err;
+-
+-    if (!avctx->hw_device_ctx) {
+-        av_log(ctx, AV_LOG_ERROR, "A hardware device reference is required "
+-               "to upload frames to.\n");
+-        return AVERROR(EINVAL);
+-    }
+-
+-    if (ctx->device_type) {
+-        err = av_hwdevice_ctx_create_derived(
+-            &ctx->hwdevice_ref,
+-            av_hwdevice_find_type_by_name(ctx->device_type),
+-            avctx->hw_device_ctx, 0);
+-        if (err < 0)
+-            return err;
+-    } else {
+-        ctx->hwdevice_ref = av_buffer_ref(avctx->hw_device_ctx);
+-        if (!ctx->hwdevice_ref)
+-            return AVERROR(ENOMEM);
+-    }
+-
+-    return 0;
+-}
+-
+ static int hwupload_query_formats(AVFilterContext *avctx)
+ {
+     HWUploadContext *ctx = avctx->priv;
+@@ -74,6 +47,27 @@ static int hwupload_query_formats(AVFilterContext *avctx)
+     AVFilterFormats *input_formats = NULL;
+     int err, i;
+ 
++    if (ctx->hwdevice_ref) {
++        /* We already have a specified device. */
++    } else if (avctx->hw_device_ctx) {
++        if (ctx->device_type) {
++            err = av_hwdevice_ctx_create_derived(
++                &ctx->hwdevice_ref,
++                av_hwdevice_find_type_by_name(ctx->device_type),
++                avctx->hw_device_ctx, 0);
++            if (err < 0)
++                return err;
++        } else {
++            ctx->hwdevice_ref = av_buffer_ref(avctx->hw_device_ctx);
++            if (!ctx->hwdevice_ref)
++                return AVERROR(ENOMEM);
++        }
++    } else {
++        av_log(ctx, AV_LOG_ERROR, "A hardware device reference is required "
++               "to upload frames to.\n");
++        return AVERROR(EINVAL);
++    }
++
+     constraints = av_hwdevice_get_hwframe_constraints(ctx->hwdevice_ref, NULL);
+     if (!constraints) {
+         err = AVERROR(EINVAL);
+@@ -261,7 +255,6 @@ const FFFilter ff_vf_hwupload = {
+     .p.description = NULL_IF_CONFIG_SMALL("Upload a normal frame to a hardware frame"),
+     .p.priv_class  = &hwupload_class,
+     .p.flags       = AVFILTER_FLAG_HWDEVICE,
+-    .init          = hwupload_init,
+     .uninit        = hwupload_uninit,
+     .priv_size     = sizeof(HWUploadContext),
+     FILTER_INPUTS(hwupload_inputs),

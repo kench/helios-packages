@@ -8,7 +8,10 @@ Project Status and Handoff"; the boards are in "Hardware Deployment Information"
 
 ## Status (2026-11-21)
 
-- `helios-srtla-send` (irlserver srtla_send 4.1.0, MIT) is packaged: `helios-srtla-send/build.sh`.
+- `helios-srtla-send` (irlserver srtla_send 4.1.0, MIT) is packaged and published (`4.1.0-1`).
+- `helios-ffmpeg-rk3588` (FFmpeg 9.0.2 + ffmpeg-rockchip, MPP and RGA static, x264, SRT,
+  RTMPS): the recipe builds in CI on `ubuntu-24.04-arm`; not released until it's verified on the
+  Orange Pi (README: "helios-ffmpeg-rk3588").
 - Publishing works end to end in local tests: `.github/workflows/release.yml` on tags
   `<package>/<version>`, `.github/scripts/build-apt-repo.sh` for the `trixie` suite, signed with
   this repository's own key (`APT_SIGNING_KEY`, fingerprint
@@ -17,12 +20,11 @@ Project Status and Handoff"; the boards are in "Hardware Deployment Information"
 
 Next:
 
-1. `helios-ffmpeg-rpi5`: bring over the cross-build from kench/raspberry-pi-5-tools (FFmpeg
-   9.0.2 with the Raspberry Pi patches, x264, SRT), installed to `/usr/lib/helios-ffmpeg` with
-   an rpath, built in a `debian:trixie` container, `Depends` from `dpkg-shlibdeps`.
-2. `helios-ffmpeg-rk3588`: FFmpeg with Rockchip MPP and RGA for the Orange Pi 5 Plus on Armbian
-   Trixie with the vendor kernel (6.1). MPP and RGA aren't in Debian, so they're bundled or
-   packaged here.
+1. `helios-ffmpeg-rpi5`: bring over the build from kench/raspberry-pi-5-tools (FFmpeg 9.0.2
+   with the Raspberry Pi patches, x264, SRT, plus GnuTLS for RTMPS like the RK3588 build) the
+   same way as `helios-ffmpeg-rk3588`: native arm64 in `debian:trixie`, `/usr/lib/helios-ffmpeg`.
+2. `helios-ffmpeg-rk3588`: verify on the Orange Pi, then release `helios-ffmpeg-rk3588/9.0.2-1`;
+   boards with an RK3588 add the `rk3588` component.
 3. BELABOX srtla (`helios-srtla`) only if it's still wanted next to irlserver's sender.
 
 ## FFmpeg build flags
@@ -36,8 +38,11 @@ flags: FFmpeg's assembly picks those at run time. Verify on the board before the
 ## Adding a package
 
 A folder named after the package with `package.env` (`NAME`, `VERSION`, the pinned upstream tag
-and commit, `SUITE`, `COMPONENT`, target) and an executable `build.sh [OUT_DIR]` that verifies
-the upstream commit, builds, checks the result and writes `<package>_<version>_<arch>.deb`. The
+and commit, `SUITE`, `COMPONENT`, target; `BUILD_RUNNER`, `BUILD_CONTAINER` (pinned by digest)
+and `BUILD_DEPS` for container builds; `BUILD_TOOLS=zigbuild` for host Rust builds) and an
+executable `build.sh [OUT_DIR]` that verifies every upstream commit, builds, checks the result
+and writes `<package>_<version>_<arch>.deb`, plus `<package>_<version>_source.tar.xz` for GPL
+packages (published next to it). Build with `.github/scripts/build-package.sh <package>`. The
 release tag is `<package>/<version>`. Never publish a version twice with different contents.
 
 ## Targets

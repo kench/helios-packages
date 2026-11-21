@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nyanmisaka <nst799610810@gmail.com>
+Date: Sun, 25 Oct 2026 21:43:23 +0800
+Subject: [PATCH 11/19] Revert "avdevice/v4l2: rename 'buff_data' ->
+ 'buf_desc'"
+
+This reverts commit e43aab67ed00e7aa66e8e4eb4f0f57e8a6b2d11e.
+---
+ libavdevice/v4l2.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/libavdevice/v4l2.c b/libavdevice/v4l2.c
+index 28bcc3df2a..b2e98e3e14 100644
+--- a/libavdevice/v4l2.c
++++ b/libavdevice/v4l2.c
+@@ -125,7 +125,7 @@ struct video_data {
+     int (*munmap_f)(void *_start, size_t length);
+ };
+ 
+-struct buf_desc {
++struct buff_data {
+     struct video_data *s;
+     int index;
+ };
+@@ -468,7 +468,7 @@ static void mmap_release_buffer(void *opaque, uint8_t *data)
+ {
+     struct v4l2_plane planes[VIDEO_MAX_PLANES];
+     struct v4l2_buffer buf = { 0 };
+-    struct buf_desc *buf_descriptor = opaque;
++    struct buff_data *buf_descriptor = opaque;
+     struct video_data *s = buf_descriptor->s;
+ 
+     buf.type = s->buf_type;
+@@ -621,12 +621,12 @@ static int mmap_read_frame(AVFormatContext *ctx, AVPacket *pkt)
+             return res;
+         }
+     } else {
+-        struct buf_desc *buf_descriptor;
++        struct buff_data *buf_descriptor;
+ 
+         pkt->data     = s->buf_data[buf.index].start;
+         pkt->size     = bytesused;
+ 
+-        buf_descriptor = av_malloc(sizeof(struct buf_desc));
++        buf_descriptor = av_malloc(sizeof(struct buff_data));
+         if (!buf_descriptor) {
+             /* Something went wrong... Since av_malloc() failed, we cannot even
+              * allocate a buffer for memcpying into it

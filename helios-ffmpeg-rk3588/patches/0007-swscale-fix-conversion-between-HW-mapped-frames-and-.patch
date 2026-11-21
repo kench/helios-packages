@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nyanmisaka <nst799610810@gmail.com>
+Date: Thu, 10 Sep 2026 17:00:23 +0800
+Subject: [PATCH 07/19] swscale: fix conversion between HW-mapped frames and SW
+ frames
+
+The `hw_frames_ctx` of a frame obtained via HW-mapping through `hwmap`
+holds a reference to the original hardware frame, yet the frame itself
+is a software frame. There is no reason to refuse converting it to
+another software frame using swscale.
+
+```
+ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -i <INPUT> -an -sn -dn \
+-vf "hwmap=mode=read,format=nv12,format=yuv420p" -vframes 1 -f null -
+```
+
+Fixes 362414afbaaf2174d695bea8b40eb4e60598bad9
+
+Signed-off-by: nyanmisaka <nst799610810@gmail.com>
+---
+ libswscale/format.c  |  7 ++++++-
+ libswscale/swscale.c | 16 ++++++++++++++--
+ 2 files changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/libswscale/format.c b/libswscale/format.c
+index 10536b6935..a7821b200a 100644
+--- a/libswscale/format.c
++++ b/libswscale/format.c
+@@ -353,7 +353,12 @@ SwsFormat ff_fmt_from_frame(const AVFrame *frame, int field)
+     enum AVPixelFormat hw_format = AV_PIX_FMT_NONE;
+ 
+ #if CONFIG_UNSTABLE
+-    if (frame->hw_frames_ctx) {
++    const AVPixFmtDescriptor *hw_desc = av_pix_fmt_desc_get(frame->format);
++    av_assert0(hw_desc);
++
++    if (hw_desc->flags & AV_PIX_FMT_FLAG_HWACCEL) {
++        av_assert0(frame->hw_frames_ctx);
++
+         AVHWFramesContext *hwfc = (AVHWFramesContext *)frame->hw_frames_ctx->data;
+         hw_format = frame->format;
+         format = hwfc->sw_format;
+diff --git a/libswscale/swscale.c b/libswscale/swscale.c
+index 969456efcc..f23fb565e4 100644
+--- a/libswscale/swscale.c
++++ b/libswscale/swscale.c
+@@ -1468,10 +1468,22 @@ int sws_frame_setup(SwsContext *ctx, const AVFrame *dst, const AVFrame *src)
+     if ((ret = validate_params(ctx)) < 0)
+         return ret;
+ 
++    const AVPixFmtDescriptor *src_desc = av_pix_fmt_desc_get(src->format);
++    const AVPixFmtDescriptor *dst_desc = av_pix_fmt_desc_get(dst->format);
++    av_assert0(src_desc);
++    av_assert0(dst_desc);
++
++    const int src_is_hwaccel = !!(src_desc->flags & AV_PIX_FMT_FLAG_HWACCEL);
++    const int dst_is_hwaccel = !!(dst_desc->flags & AV_PIX_FMT_FLAG_HWACCEL);
++    if (src_is_hwaccel && !src->hw_frames_ctx)
++        return AVERROR(EINVAL);
++    if (dst_is_hwaccel && !dst->hw_frames_ctx)
++        return AVERROR(EINVAL);
++
+     /* For now, if a single frame has a context, then both need a context */
+-    if (!!src->hw_frames_ctx != !!dst->hw_frames_ctx) {
++    if (src_is_hwaccel ^ dst_is_hwaccel) {
+         return AVERROR(ENOTSUP);
+-    } else if (!!src->hw_frames_ctx) {
++    } else if (src_is_hwaccel) {
+         /* Both hardware frames must already be allocated */
+         if (!src->data[0] || !dst->data[0])
+             return AVERROR(EINVAL);
