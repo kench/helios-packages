@@ -61,8 +61,11 @@ cmake -S "$SRC/mpp" -B "$WORK/mpp" -G Ninja -Wno-dev \
     -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX="$DEPS" -DCMAKE_INSTALL_LIBDIR=lib \
     -DBUILD_TEST=OFF -DBUILD_SHARED_LIBS=OFF >/dev/null
 ninja -C "$WORK/mpp" -j "$JOBS" install >/dev/null
-# As jellyfin-ffmpeg does: MPP is C++, so a static link needs libstdc++.
-echo "Libs.private: -lstdc++" >>"$DEPS/lib/pkgconfig/rockchip_mpp.pc"
+# MPP and librga are C++ and static here, so linking them needs libstdc++ (jellyfin-ffmpeg adds it
+# to Libs.private and links everything with --static). It goes in Libs instead, so FFmpeg links
+# the system libraries (GnuTLS, x264, SRT) normally.
+static_libs() { sed -i 's/^Libs: .*/& -lstdc++ -lpthread -lm/' "$1"; grep '^Libs:' "$1"; }
+static_libs "$DEPS/lib/pkgconfig/rockchip_mpp.pc"
 
 echo "== librga $RGA_COMMIT (static)"
 sed -i 's/shared_library/library/g' "$SRC/rga/meson.build"
@@ -70,25 +73,27 @@ CXXFLAGS="$CXXFLAGS -fpermissive" meson setup "$WORK/rga" "$SRC/rga" \
     --prefix="$DEPS" --libdir=lib --buildtype=plain --default-library=static \
     -Dlibdrm=false -Dlibrga_demo=false >/dev/null
 ninja -C "$WORK/rga" -j "$JOBS" install >/dev/null
-echo "Libs.private: -lstdc++" >>"$DEPS/lib/pkgconfig/librga.pc"
+static_libs "$DEPS/lib/pkgconfig/librga.pc"
 
 set -- "$HERE"/patches/*.patch
 echo "== FFmpeg $UPSTREAM_TAG + $# patches"
 mkdir -p "$WORK/ffmpeg"
 ffcflags="$(dpkg-buildflags --get CPPFLAGS) $(DEB_CFLAGS_MAINT_STRIP='-O2 -g' dpkg-buildflags --get CFLAGS)"
+ffcxxflags=$CXXFLAGS
+ffldflags=$LDFLAGS
 (
     cd "$WORK/ffmpeg"
-    # --cpu becomes -mcpu; the assembly is chosen at run time. --pkg-config-flags=--static picks
-    # up MPP's and RGA's Libs.private; --as-needed drops what isn't used.
+    # --cpu becomes -mcpu; the assembly is chosen at run time. configure would also take CFLAGS
+    # and friends from the environment (the libraries' -O2 -g): only the --extra flags here.
+    unset CFLAGS CXXFLAGS LDFLAGS
     PKG_CONFIG_PATH=$DEPS/lib/pkgconfig "$SRC/ffmpeg/configure" \
         --prefix="$PREFIX" \
         --arch=aarch64 \
         --cpu="$CPU" \
         --extra-version="helios-${VERSION#*-}" \
         --extra-cflags="$ffcflags" \
-        --extra-cxxflags="$CXXFLAGS" \
-        --extra-ldflags="$LDFLAGS" \
-        --pkg-config-flags=--static \
+        --extra-cxxflags="$ffcxxflags" \
+        --extra-ldflags="$ffldflags" \
         --enable-gpl \
         --enable-version3 \
         --disable-shared \
