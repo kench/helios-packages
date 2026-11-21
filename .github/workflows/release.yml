@@ -1,6 +1,7 @@
 # Publishes one package to helios-packages' suite of the Helios APT repository (helios-cloud's
 # AptRepository stack) when its release tag is pushed: <package>/<version>, for example
-# helios-srtla-send/4.1.0-1, where <package> is a folder with package.env and build.sh.
+# helios-srtla-send/4.1.0-1, where <package> is a folder with package.env and build.sh. The build
+# itself is build-package.yml, which CI also runs for changed packages.
 #
 # Needs, in this repository's settings:
 #   secrets.APT_SIGNING_KEY             armored private GPG key for this suite (no passphrase)
@@ -25,13 +26,11 @@ concurrency:
 
 env:
   AWS_REGION: us-west-2
-  ZIG_VERSION: 0.14.1
-  CARGO_ZIGBUILD_VERSION: 0.24.1
 
 jobs:
-  build:
-    name: Build the package
-    runs-on: ubuntu-24.04
+  tag:
+    name: Check the tag
+    runs-on: ubuntu-latest
     outputs:
       package: ${{ steps.tag.outputs.package }}
       suite: ${{ steps.tag.outputs.suite }}
@@ -67,31 +66,23 @@ jobs:
             echo "component=$COMPONENT"
           } >>"$GITHUB_OUTPUT"
 
-      - name: Install zig and cargo-zigbuild
-        run: |
-          python3 -m pip install --user "ziglang==$ZIG_VERSION"
-          cargo install --locked cargo-zigbuild --version "$CARGO_ZIGBUILD_VERSION"
-
-      - name: Build
-        run: ./${{ steps.tag.outputs.package }}/build.sh out
-
-      - name: Upload the package
-        uses: actions/upload-artifact@v7
-        with:
-          name: deb
-          path: out/*.deb
-          if-no-files-found: error
+  build:
+    name: Build
+    needs: tag
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: ${{ needs.tag.outputs.package }}
 
   publish:
     name: Publish to the APT repository
-    needs: build
+    needs: [tag, build]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
     env:
-      SUITE: ${{ needs.build.outputs.suite }}
-      COMPONENT: ${{ needs.build.outputs.component }}
+      SUITE: ${{ needs.tag.outputs.suite }}
+      COMPONENT: ${{ needs.tag.outputs.component }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -99,8 +90,8 @@ jobs:
       - name: Download the package
         uses: actions/download-artifact@v7
         with:
-          name: deb
-          path: dist-deb
+          name: package-${{ needs.tag.outputs.package }}
+          path: dist
 
       - name: AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -120,7 +111,7 @@ jobs:
         run: aws s3 sync --only-show-errors "s3://${{ vars.APT_BUCKET }}/pool/$SUITE" "repo/pool/$SUITE"
 
       - name: Build and sign the suite
-        run: .github/scripts/build-apt-repo.sh repo "$KEY_ID" "$SUITE" "$COMPONENT" dist-deb/*.deb
+        run: .github/scripts/build-apt-repo.sh repo "$KEY_ID" "$SUITE" "$COMPONENT" dist/*
 
       # Packages first and InRelease last, so a device updating meanwhile sees either the old
       # release or the complete new one.
@@ -129,10 +120,12 @@ jobs:
           BUCKET: ${{ vars.APT_BUCKET }}
         run: |
           cd repo
-          for deb in ../dist-deb/*.deb; do
-            package=$(dpkg-deb -f "$deb" Package)
+          # The packages and their source tarballs (<package>_<version>_...).
+          for file in ../dist/*; do
+            name=$(basename "$file")
+            package=${name%%_*}
             dir=pool/$SUITE/$COMPONENT/$(printf '%.1s' "$package")/$package
-            aws s3 cp --only-show-errors "$dir/$(basename "$deb")" "s3://$BUCKET/$dir/"
+            aws s3 cp --only-show-errors "$dir/$name" "s3://$BUCKET/$dir/"
           done
           for dir in dists/"$SUITE"/*/; do
             aws s3 cp --only-show-errors --recursive "$dir" "s3://$BUCKET/$dir"

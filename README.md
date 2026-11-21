@@ -7,24 +7,31 @@ next to the `helios` package itself.
 | Package | Board | Contents |
 | --- | --- | --- |
 | `helios-ffmpeg-rpi5` | Raspberry Pi 5 (Pi OS Trixie) | FFmpeg with the Raspberry Pi patch set (V4L2 request HEVC decode, DRM/EGL output), libx264, libsrt |
-| `helios-ffmpeg-rk3588` | Orange Pi 5 Plus (Armbian Trixie, vendor kernel 6.1) | FFmpeg with Rockchip MPP encode/decode and RGA, libx264, libsrt |
+| `helios-ffmpeg-rk3588` | Orange Pi 5 Plus (Armbian Trixie, vendor kernel 6.1) | FFmpeg 9.0.2 with [nyanmisaka/ffmpeg-rockchip](https://github.com/nyanmisaka/ffmpeg-rockchip)'s patches: Rockchip MPP hardware decode (H.264, HEVC, VP9, AV1) and encode (H.264, HEVC), RGA scale/crop/overlay, libx264, libsrt, RTMP/RTMPS (GnuTLS). **Recipe ready; to verify on the board** |
 | `helios-srtla-send` | any arm64 | irlserver [srtla_send](https://github.com/irlserver/srtla_send) (MIT), the SRTLA bonding sender, as `/usr/bin/srtla_send`. **Packaged** (`4.1.0-1`) |
 | `helios-srtla` | any arm64 | BELABOX srtla (`srtla_send`, `srtla_rec`), if still needed; its `srtla_send` would install aside, under `/usr/lib/helios-srtla/` |
 
 ## Status
 
-`helios-srtla-send` is packaged; the FFmpeg builds are next. `AGENTS.md` lists the next steps
-for each package.
+`helios-srtla-send` is packaged; `helios-ffmpeg-rk3588`'s recipe builds in CI and waits for the
+Orange Pi; `helios-ffmpeg-rpi5` is next. `AGENTS.md` lists the next steps for each package.
 
 ## Packages and releases
 
 Each package is a folder with `package.env` (name, version, pinned upstream tag and commit,
-suite, component, target) and `build.sh`, which fetches the pinned upstream source, checks the
-commit, builds it and writes `out/<package>_<version>_<arch>.deb`:
+suite, component, target, and optionally `BUILD_RUNNER`, `BUILD_CONTAINER`, `BUILD_DEPS`) and
+`build.sh`, which fetches the pinned upstream source, checks the commit, builds it and writes
+`out/<package>_<version>_<arch>.deb` (and, for GPL packages, `<package>_<version>_source.tar.xz`).
+`.github/scripts/build-package.sh` runs it, in the package's container when it names one:
 
 ```sh
-./helios-srtla-send/build.sh        # needs rustup, cargo-zigbuild and zig 0.14.1, readelf, dpkg-deb
+.github/scripts/build-package.sh helios-srtla-send     # on the host: rustup, cargo-zigbuild, zig 0.14.1
+.github/scripts/build-package.sh helios-ffmpeg-rk3588  # on an arm64 host with docker (debian:trixie)
 ```
+
+`.github/workflows/build-package.yml` is the build in GitHub Actions, on the runner `package.env`
+asks for (`ubuntu-24.04-arm` for native arm64 builds). CI runs it on every PR for each package
+whose folder changed, and the release workflow runs it before publishing.
 
 To release, merge the version change to `main`, then tag that commit `<package>/<version>` (for
 example `helios-srtla-send/4.1.0-1`) and push the tag. `.github/workflows/release.yml` checks the
@@ -47,16 +54,43 @@ deb [arch=arm64 signed-by=/usr/share/keyrings/helios-packages-archive-keyring.gp
 
 ## Plan
 
-- Each FFmpeg package installs to `/usr/lib/helios-ffmpeg/{bin,lib}` with an rpath, so it never
-  clashes with the distribution's FFmpeg, and both provide `helios-ffmpeg` and conflict with each
-  other. Helios's video module uses the same path on every board.
-- Builds run in a container of the target's Debian release (Trixie, glibc 2.41), cross-compiling
-  with Debian's multiarch toolchain; `dpkg-shlibdeps` sets the runtime dependencies.
+- Each FFmpeg package installs `ffmpeg` and `ffprobe` to `/usr/lib/helios-ffmpeg/bin`, so it
+  never clashes with the distribution's FFmpeg, and both provide `helios-ffmpeg` and conflict
+  with each other. Helios's video module uses the same path on every board.
+- Builds run natively on GitHub's arm64 runners in a pinned `debian:trixie` container (glibc
+  2.41); `dpkg-shlibdeps` sets the runtime dependencies. FFmpeg's own libraries are linked
+  statically, so there's no rpath.
 - Releases are tagged per package (for example `helios-ffmpeg-rpi5/9.0.2-1`) and published to the
   `trixie` suite, in a component per board (`rpi5`, `rk3588`) plus `main` for board-independent
   packages, signed with this repository's own key (above).
 - The FFmpeg builds are GPL (libx264): this public repository holds the scripts and patches,
-  and each release also publishes its source.
+  and each release also publishes its corresponding source next to the package in the pool
+  (`<package>_<version>_source.tar.xz`).
+
+## helios-ffmpeg-rk3588
+
+- **FFmpeg n9.0.2 + `patches/`:** nyanmisaka/ffmpeg-rockchip's 19 commits on FFmpeg's
+  `release/9.0` (branch `9.0` at `FORK_COMMIT`), exported with `git format-patch`; they apply
+  unchanged to n9.0.2. To update: fetch the fork's branch and `release/9.0`, then
+  `git format-patch --zero-commit --no-signature -o patches/ <release/9.0>..<fork>` and bump
+  `FORK_COMMIT` and the version.
+- **Rockchip MPP and librga, linked statically,** at the commits jellyfin-ffmpeg builds with
+  (`nyanmisaka/rk-mirrors`, `jellyfin-mpp-next` and `jellyfin-rga-next`). Neither is in Debian;
+  linking them in means nothing else to install, and no clash with Armbian's own packages.
+- **Configured with** `--enable-gpl --enable-version3` (required for MPP; the result is GPLv3),
+  `--enable-rkmpp --enable-rkrga --enable-libdrm --enable-libx264 --enable-libsrt --enable-gnutls`
+  (RTMPS and HTTPS), static FFmpeg libraries, no ffplay or docs. FFmpeg's native RTMP covers
+  `rtmp://` and Enhanced RTMP.
+- **Checked when built:** the MPP encoders and decoders, the RGA filters, the `rkmpp` hwaccel,
+  the `rtmp`, `rtmps`, `srt` and `https` protocols, GPLv3, MPP/RGA not linked dynamically, and
+  FFmpeg's `checkasm` (on the runner's CPU).
+- **udev rules** (`/usr/lib/udev/rules.d/60-helios-rockchip-media.rules`) give the `video` group
+  `/dev/mpp_service`, `/dev/rga`, `/dev/dma_heap/*` and the older device names; Helios's user
+  must be in `video`.
+- **On the board, before the first release:** the encoder and RGA on real video (for example
+  `ffmpeg -hwaccel rkmpp -hwaccel_output_format drm_prime -i in.mp4 -vf scale_rkrga=w=1280:h=720
+  -c:v h264_rkmpp out.mp4`), the device permissions as the `helios` user, `checkasm` on the
+  RK3588, and the build flags (README: "FFmpeg build flags").
 
 The Raspberry Pi 5 build comes from
 [kench/raspberry-pi-5-tools](https://github.com/kench/raspberry-pi-5-tools).

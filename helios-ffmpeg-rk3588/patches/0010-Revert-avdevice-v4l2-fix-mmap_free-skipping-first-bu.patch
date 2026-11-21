@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nyanmisaka <nst799610810@gmail.com>
+Date: Sun, 25 Oct 2026 21:43:14 +0800
+Subject: [PATCH 10/19] Revert "avdevice/v4l2: fix mmap_free() skipping first
+ buffer"
+
+This reverts commit 603234f945be3a508ca42b272ff76468168e510d.
+---
+ libavdevice/v4l2.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/libavdevice/v4l2.c b/libavdevice/v4l2.c
+index 2ca093b7b0..28bcc3df2a 100644
+--- a/libavdevice/v4l2.c
++++ b/libavdevice/v4l2.c
+@@ -362,8 +362,9 @@ static void list_standards(AVFormatContext *ctx)
+ 
+ static void mmap_free(struct video_data *s, int n)
+ {
+-    for (int i = 0; i < n; i++)
+-        v4l2_munmap(s->buf_data[i].start, s->buf_data[i].len);
++    while (--n > 0) {
++        v4l2_munmap(s->buf_data[n].start, s->buf_data[n].len);
++    }
+     av_freep(&s->buf_data);
+ }
+ 

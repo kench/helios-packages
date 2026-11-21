@@ -1,0 +1,69 @@
+# Builds one package on the runner its package.env asks for (BUILD_RUNNER, default ubuntu-24.04)
+# and uploads its files (the .deb, and the source tarball where there is one) as the artifact
+# package-<package>. Called by the release workflow and, for changed packages, by CI.
+name: Build a package
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: The package folder, for example helios-srtla-send
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  ZIG_VERSION: 0.14.1
+  CARGO_ZIGBUILD_VERSION: 0.24.1
+
+jobs:
+  plan:
+    name: Plan ${{ inputs.package }}
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.env.outputs.runner }}
+      zigbuild: ${{ steps.env.outputs.zigbuild }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read package.env
+        id: env
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          BUILD_RUNNER=ubuntu-24.04
+          BUILD_TOOLS=
+          . "./$PACKAGE/package.env"
+          echo "runner=$BUILD_RUNNER" >>"$GITHUB_OUTPUT"
+          case " $BUILD_TOOLS " in
+            *" zigbuild "*) echo "zigbuild=true" >>"$GITHUB_OUTPUT" ;;
+            *) echo "zigbuild=false" >>"$GITHUB_OUTPUT" ;;
+          esac
+
+  build:
+    name: Build ${{ inputs.package }}
+    needs: plan
+    runs-on: ${{ needs.plan.outputs.runner }}
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install zig and cargo-zigbuild
+        if: needs.plan.outputs.zigbuild == 'true'
+        run: |
+          python3 -m pip install --user "ziglang==$ZIG_VERSION"
+          cargo install --locked cargo-zigbuild --version "$CARGO_ZIGBUILD_VERSION"
+
+      - name: Build
+        run: .github/scripts/build-package.sh "${{ inputs.package }}" out
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: package-${{ inputs.package }}
+          path: out/*
+          if-no-files-found: error
