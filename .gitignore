@@ -1,0 +1,6 @@
+# Sources, build trees and staged installs (fetched or produced by the build scripts).
+/src/
+/build/
+/stage/
+/out/
+*.deb
