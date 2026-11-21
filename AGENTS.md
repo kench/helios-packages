@@ -25,6 +25,14 @@ Next:
    packaged here.
 3. BELABOX srtla (`helios-srtla`) only if it's still wanted next to irlserver's sender.
 
+## FFmpeg build flags
+
+Use the per-board flags in the README's "FFmpeg build flags" section (`--cpu=cortex-a76` for the
+Pi 5, `--cpu=cortex-a76.cortex-a55` for the RK3588, default `-O3`, Debian's hardening flags).
+Never target a newer CPU than the board's, and don't add `+crypto`, `i8mm` or SVE to the C
+flags: FFmpeg's assembly picks those at run time. Verify on the board before the first release
+(`/proc/cpuinfo`, `checkasm`, a benchmark with and without LTO).
+
 ## Adding a package
 
 A folder named after the package with `package.env` (`NAME`, `VERSION`, the pinned upstream tag

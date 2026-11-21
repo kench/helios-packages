@@ -61,6 +61,37 @@ deb [arch=arm64 signed-by=/usr/share/keyrings/helios-packages-archive-keyring.gp
 The Raspberry Pi 5 build comes from
 [kench/raspberry-pi-5-tools](https://github.com/kench/raspberry-pi-5-tools).
 
+## FFmpeg build flags
+
+Decided 2026-11-21: the FFmpeg packages are built with the optimal flags for each board's CPU.
+Checked against FFmpeg n9.0.2's `configure` and Debian Trixie's cross compiler
+(`aarch64-linux-gnu-gcc` 14.2):
+
+| | `helios-ffmpeg-rpi5` | `helios-ffmpeg-rk3588` |
+| --- | --- | --- |
+| CPU | BCM2712: 4× Cortex-A76 | RK3588: 4× Cortex-A76 + 4× Cortex-A55 (threads move between them) |
+| `configure` | `--arch=aarch64 --cpu=cortex-a76` | `--arch=aarch64 --cpu=cortex-a76.cortex-a55` |
+| Resulting C flags | `-mcpu=cortex-a76 -O3` | `-mcpu=cortex-a76.cortex-a55 -O3` (GCC's big.LITTLE tuning) |
+| Instruction set used by C code | Armv8.2-A: LSE atomics, CRC32, dot product, FP16, RDM, RCpc | the same: identical on both core types |
+
+- `--cpu=X` becomes `-mcpu=X` (`-march=X` for `armv*` values); FFmpeg's default optimization is
+  `-O3`, kept.
+- The hand-written assembly doesn't depend on `--cpu`: NEON, CRC, PMULL, dot product, i8mm and
+  SVE/SVE2 code is always assembled, and `libavutil` picks it at run time from the CPU's hwcaps.
+  Neither board has i8mm or SVE, so those paths stay unused. `--cpu` tunes and vectorizes the C
+  code.
+- The crypto extension (AES/SHA) is optional on these cores and isn't implied by `-mcpu`; FFmpeg's
+  C code doesn't need it, so it isn't added.
+- Debian's hardening flags are kept, as Debian builds FFmpeg (`-fstack-protector-strong`,
+  `-D_FORTIFY_SOURCE=2`, `-fstack-clash-protection`, `-mbranch-protection=standard`: PAC/BTI
+  instructions are no-ops on these cores), since FFmpeg parses streams from the network.
+- `x264` and `libsrt` come from Debian (`libx264-dev`, `libsrt-gnutls-dev`): x264's speed is in
+  its NEON assembly, which it selects at run time.
+- Before a board's first release: compare its `/proc/cpuinfo` features with the table (expected:
+  `asimd atomics crc32 asimddp asimdhp asimdrdm lrcpc`), run FFmpeg's `checkasm` on the board, and
+  benchmark a fixed encode (`ffmpeg -benchmark`) with and without `--enable-lto` (keep LTO only if
+  it's measurably faster).
+
 ## CI
 
 `.github/workflows/ci.yml` checks that each PR title and commit subject follows Conventional
