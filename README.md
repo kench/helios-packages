@@ -32,6 +32,13 @@ package and what publishing needs.
 The Raspberry Pi 5 build comes from
 [kench/raspberry-pi-5-tools](https://github.com/kench/raspberry-pi-5-tools).
 
+## CI
+
+`.github/workflows/ci.yml` checks that each PR title and commit subject follows Conventional
+Commits (`.github/scripts/check-conventional-commit.sh`, the same rules as the other Helios
+repositories) and runs shellcheck on every shell script. Both are required on `main`, and PRs are
+squash-merged with the PR title as the commit title.
+
 ## License
 
 The scripts and packaging in this repository are CC0-1.0 (`LICENSE`). The software they build

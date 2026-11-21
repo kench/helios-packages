@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conventional-commits:
+    name: Conventional Commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The title becomes the commit message on main for squash merges, the only merge method
+      # allowed here. The PR's own commits are checked too, as in the other Helios repositories.
+      - name: Check PR title and commit subjects
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          echo "PR title:"
+          printf '%s\n' "$PR_TITLE" | sh .github/scripts/check-conventional-commit.sh
+          echo
+          echo "Commits:"
+          git log --no-merges --format=%s "$BASE_SHA..$HEAD_SHA" \
+            | sh .github/scripts/check-conventional-commit.sh
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Every shell script in the repository: the build and packaging scripts to come, and the
+      # CI helpers.
+      - name: Shellcheck
+        run: |
+          set -eu
+          scripts=$(git ls-files '*.sh')
+          if [ -z "$scripts" ]; then
+            echo "no shell scripts"
+            exit 0
+          fi
+          echo "$scripts"
+          shellcheck --severity=style $scripts
