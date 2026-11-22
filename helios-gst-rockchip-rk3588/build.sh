@@ -92,17 +92,29 @@ case $needed in
     *rockchip* | *librga*) echo "MPP or RGA is linked dynamically: $needed" >&2; exit 1 ;;
 esac
 echo "needs: $needed"
-# The elements belacoder's and ceracoder's pipelines use register without Rockchip hardware.
+# GStreamer loads the plugin. Each element registers only if MPP finds the hardware for its
+# codec, so the elements and the encoder's bitrate properties are checked only where there's an
+# MPP device (a build on the RK3588); elsewhere, that the plugin holds them.
 registry=$WORK/registry.bin
 inspect() { GST_REGISTRY=$registry GST_PLUGIN_PATH=$STAGE$PLUGIN_DIR gst-inspect-1.0 "$@"; }
-elements=$(inspect rockchipmpp)
+plugin_info=$(inspect rockchipmpp) || { echo "GStreamer can't load the plugin" >&2; exit 1; }
+printf '%s\n' "$plugin_info" | grep -qE "^ +Filename +$STAGE$PLUGIN_DIR/libgstrockchipmpp.so$" \
+    || { echo "GStreamer didn't load $plugin" >&2; printf '%s\n' "$plugin_info" >&2; exit 1; }
 for e in mpph264enc mpph265enc mppvideodec mppjpegdec; do
-    printf '%s\n' "$elements" | grep -qE "^ +$e:" || { echo "rockchipmpp: no $e" >&2; exit 1; }
+    grep -qa "$e" "$plugin" || { echo "the plugin has no $e" >&2; exit 1; }
 done
-for p in bitrate bitrate-min bitrate-max gop width height; do
-    inspect mpph265enc | grep -qE "^  $p +:" || { echo "mpph265enc: no $p property" >&2; exit 1; }
-done
-printf '%s\n' "$elements" | grep -E "^ +(Version|mpp)"
+if [ -e /dev/mpp_service ]; then
+    for e in mpph264enc mpph265enc mppvideodec mppjpegdec; do
+        printf '%s\n' "$plugin_info" | grep -qE "^ +$e:" || { echo "rockchipmpp: no $e" >&2; exit 1; }
+    done
+    for p in bitrate bitrate-min bitrate-max gop width height; do
+        inspect mpph265enc | grep -qE "^  $p +:" || { echo "mpph265enc: no $p property" >&2; exit 1; }
+    done
+    printf '%s\n' "$plugin_info" | grep -E "^ +mpp"
+else
+    echo "no MPP device here: the elements are checked on the RK3588"
+fi
+printf '%s\n' "$plugin_info" | grep -E "^ +Version"
 
 # udev rules: the media devices, for the video group (as helios-ffmpeg-rk3588 installs; either
 # package alone is enough, and both together are harmless).
