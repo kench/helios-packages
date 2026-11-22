@@ -87,6 +87,14 @@ deb [arch=arm64 signed-by=/usr/share/keyrings/helios-packages-archive-keyring.gp
 - **udev rules** (`/usr/lib/udev/rules.d/60-helios-rockchip-media.rules`) give the `video` group
   `/dev/mpp_service`, `/dev/rga`, `/dev/dma_heap/*` and the older device names; Helios's user
   must be in `video`.
+- **Tested on the Orange Pi 5 Plus (2026-11-21, Armbian 26.8.2, kernel 6.1.115-vendor):** as a
+  `video` user, 10 s of 1080p H.264 in each case, all frames out: decode → `scale_rkrga` 720p →
+  `hevc_rkmpp` in 0.59 s (about 17× real time, 0.4 s of CPU); `h264_rkmpp` at 1080p30 in 0.78 s;
+  **1080p60 → `hevc_rkmpp` 1080p60 in 1.33 s (7.5× real time)**; software `libx264 veryfast` for
+  comparison: 5.7 s and 23 s of CPU. The CPU's features match the build flags (plus the crypto
+  extension). Found: `/dev/mpp_service` is in subsystem `mpp_class`, so `postinst` now triggers
+  udev by device name too (verified on the board). Not run yet: `checkasm` on the board, and the
+  LTO comparison.
 - **On the board, before the first release:** the encoder and RGA on real video (for example
   `ffmpeg -hwaccel rkmpp -hwaccel_output_format drm_prime -i in.mp4 -vf scale_rkrga=w=1280:h=720
   -c:v h264_rkmpp out.mp4`), the device permissions as the `helios` user, `checkasm` on the

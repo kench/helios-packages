@@ -238,7 +238,13 @@ cat >"$STAGE/DEBIAN/postinst" <<'POSTINST'
 set -e
 if [ "$1" = configure ] && command -v udevadm >/dev/null && [ -d /run/udev ]; then
     udevadm control --reload-rules || true
-    udevadm trigger --action=change --subsystem-match=dma_heap --subsystem-match=misc || true
+    # By name as well as subsystem: /dev/mpp_service is in subsystem mpp_class, not misc
+    # (found on the Orange Pi 5 Plus, 2026-11-21), and the other names vary by kernel.
+    for name in mpp_service mpp-service vpu_service vpu-service hevc_service hevc-service \
+        rkvdec rkvenc vepu h265e iep rga; do
+        udevadm trigger --action=change --sysname-match="$name" || true
+    done
+    udevadm trigger --action=change --subsystem-match=dma_heap || true
 fi
 POSTINST
 chmod 0755 "$STAGE/DEBIAN/postinst"
