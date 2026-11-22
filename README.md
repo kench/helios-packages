@@ -7,14 +7,19 @@ next to the `helios` package itself.
 | Package | Board | Contents |
 | --- | --- | --- |
 | `helios-ffmpeg-rpi5` | Raspberry Pi 5 (Pi OS Trixie) | FFmpeg with the Raspberry Pi patch set (V4L2 request HEVC decode, DRM/EGL output), libx264, libsrt |
-| `helios-ffmpeg-rk3588` | Orange Pi 5 Plus (Armbian Trixie, vendor kernel 6.1) | FFmpeg 9.0.2 with [nyanmisaka/ffmpeg-rockchip](https://github.com/nyanmisaka/ffmpeg-rockchip)'s patches: Rockchip MPP hardware decode (H.264, HEVC, VP9, AV1) and encode (H.264, HEVC), RGA scale/crop/overlay, libx264, libsrt, RTMP/RTMPS (GnuTLS). **Recipe ready; to verify on the board** |
+| `helios-ffmpeg-rk3588` | Orange Pi 5 Plus (Armbian Trixie, vendor kernel 6.1) | FFmpeg 9.0.2 with [nyanmisaka/ffmpeg-rockchip](https://github.com/nyanmisaka/ffmpeg-rockchip)'s patches: Rockchip MPP hardware decode (H.264, HEVC, VP9, AV1) and encode (H.264, HEVC), RGA scale/crop/overlay, libx264, libsrt, RTMP/RTMPS (GnuTLS). **Released** (`9.0.2-1`, component `rk3588`) |
+| `helios-gst-rockchip-rk3588` | Orange Pi 5 Plus | [BELABOX/gstreamer-rockchip](https://github.com/BELABOX/gstreamer-rockchip) (LGPL-2.1): the Rockchip MPP GStreamer elements (`mpph264enc`, `mpph265enc` with bitrate changes while running, `mppvideodec`, `mppjpegdec`), MPP and RGA static, in the private plugin directory `/usr/lib/helios-gst/gstreamer-1.0`; plus a GCC 14 build fix. Component `rk3588` |
+| `helios-belacoder` | any arm64 | [BELABOX/belacoder](https://github.com/BELABOX/belacoder) (GPL-3.0), the GStreamer SRT encoder with adaptive bitrate, as `/usr/bin/belacoder`; plus `-p` for an SRT passphrase |
+| `helios-ceracoder` | any arm64 | [ceralive/ceracoder](https://github.com/ceralive/ceracoder) (GPL-3.0), belacoder's fork with a choice of bitrate algorithms, as `/usr/bin/ceracoder`; plus `-p`, and setting the bitrate through the encoder's `bps` or `bitrate` property (BELABOX's plugin and `x264enc` have `bitrate`) |
 | `helios-srtla-send` | any arm64 | irlserver [srtla_send](https://github.com/irlserver/srtla_send) (MIT), the SRTLA bonding sender, as `/usr/bin/srtla_send`. **Packaged** (`4.1.0-1`) |
 | `helios-srtla` | any arm64 | BELABOX srtla (`srtla_send`, `srtla_rec`), if still needed; its `srtla_send` would install aside, under `/usr/lib/helios-srtla/` |
 
 ## Status
 
-`helios-srtla-send` is packaged; `helios-ffmpeg-rk3588`'s recipe builds in CI and waits for the
-Orange Pi; `helios-ffmpeg-rpi5` is next. `AGENTS.md` lists the next steps for each package.
+`helios-srtla-send` and `helios-ffmpeg-rk3588` are released. The adaptive bitrate encoders
+(`helios-gst-rockchip-rk3588`, `helios-belacoder`, `helios-ceracoder`) were proven on the Orange
+Pi by a build on the board (Notion: "Helios - Adaptive Bitrate Spike"); their recipes build in CI.
+`helios-ffmpeg-rpi5` is next. `AGENTS.md` lists the next steps for each package.
 
 ## Packages and releases
 
@@ -144,4 +149,6 @@ squash-merged with the PR title as the commit title.
 ## License
 
 The scripts and packaging in this repository are CC0-1.0 (`LICENSE`). The software they build
-keeps its own licenses (FFmpeg with libx264: GPL-2.0-or-later; srtla: AGPL-3.0).
+keeps its own licenses (FFmpeg with libx264: GPL-2.0-or-later; srtla: AGPL-3.0; belacoder and
+ceracoder: GPL-3.0; gstreamer-rockchip: LGPL-2.1), and each GPL or LGPL release publishes its
+source next to the package.

@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: helios-packages <helios-packages@invalid>
+Date: Sat, 21 Nov 2026 21:16:38 -0800
+Subject: [PATCH 2/2] Set the encoder's bitrate through whichever property it
+ has
+
+ceracoder set "bps", which Rockchip's gstreamer-rockchip has but BELABOX's
+fork of it (mpph264enc, mpph265enc) and x264enc call "bitrate". Setting a
+property an element lacks only logs a GLib warning, so the bitrate never
+changed. Look the property up once, when the encoder is found.
+---
+ src/gst/encoder_control.c | 17 ++++++++++++++++-
+ src/gst/encoder_control.h |  1 +
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/src/gst/encoder_control.c b/src/gst/encoder_control.c
+index bb5ad38..0de56c7 100644
+--- a/src/gst/encoder_control.c
++++ b/src/gst/encoder_control.c
+@@ -39,6 +39,21 @@ int encoder_control_init(EncoderControl *enc, GstPipeline *pipeline) {
+         return -1;
+     }
+ 
++    // Rockchip's gstreamer-rockchip calls it "bps"; BELABOX's fork of it, and
++    // x264enc / x265enc, call it "bitrate".
++    GObjectClass *klass = G_OBJECT_GET_CLASS(enc->element);
++    if (g_object_class_find_property(klass, "bps") != NULL) {
++        enc->property = "bps";
++    } else if (g_object_class_find_property(klass, "bitrate") != NULL) {
++        enc->property = "bitrate";
++    } else {
++        fprintf(stderr, "The encoder has no bps or bitrate property, "
++                        "no dynamic bitrate control\n");
++        gst_object_unref(enc->element);
++        enc->element = NULL;
++        return -1;
++    }
++
+     return 0;
+ }
+ 
+@@ -50,7 +65,7 @@ int encoder_control_set_bitrate(EncoderControl *enc, int bitrate_bps) {
+     // Only update if changed
+     if (bitrate_bps != enc->current_bitrate) {
+         enc->current_bitrate = bitrate_bps;
+-        g_object_set(G_OBJECT(enc->element), "bps", bitrate_bps / enc->bitrate_div, NULL);
++        g_object_set(G_OBJECT(enc->element), enc->property, bitrate_bps / enc->bitrate_div, NULL);
+     }
+ 
+     return 0;
+diff --git a/src/gst/encoder_control.h b/src/gst/encoder_control.h
+index dcd2dcd..d7b5067 100644
+--- a/src/gst/encoder_control.h
++++ b/src/gst/encoder_control.h
+@@ -33,6 +33,7 @@ typedef struct {
+     GstElement *element;
+     int bitrate_div;         // Divisor: 1 for bps, 1000 for kbps
+     int current_bitrate;     // Cached current bitrate (bps)
++    const char *property;    // The encoder's bitrate property: "bps" or "bitrate"
+ } EncoderControl;
+ 
+ /*
+-- 
+2.47.3
+
