@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: helios-packages <helios-packages@invalid>
+Date: Sat, 21 Nov 2026 21:16:01 -0800
+Subject: [PATCH] Add -p to set the SRT passphrase
+
+Sets SRTO_PASSPHRASE on the SRT socket before connecting, for listeners
+that require encryption. libsrt accepts 10 to 79 characters; the option
+checks that up front, and a passphrase libsrt still refuses ends the
+program with its error.
+---
+ belacoder.c | 19 ++++++++++++++++++-
+ 1 file changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/belacoder.c b/belacoder.c
+index c93cf29..a25f72d 100644
+--- a/belacoder.c
++++ b/belacoder.c
+@@ -85,6 +85,7 @@ int cur_bitrate = MIN_BITRATE;
+ char *bitrate_filename = NULL;
+ 
+ int srt_latency = DEF_SRT_LATENCY;
++char *srt_passphrase = NULL;
+ int srt_pkt_size = DEFAULT_SRT_PKT_SIZE;
+ 
+ uint64_t getms() {
+@@ -425,6 +426,14 @@ int connect_srt(char *host, char *port, char *stream_id) {
+     assert(ret == 0);
+   }
+ 
++  if (srt_passphrase != NULL) {
++    ret = srt_setsockflag(sock, SRTO_PASSPHRASE, srt_passphrase, strlen(srt_passphrase));
++    if (ret != 0) {
++      fprintf(stderr, "Failed to set the SRT passphrase: %s\n", srt_getlasterror_str());
++      exit(EXIT_FAILURE);
++    }
++  }
++
+   int32_t algo = 1;
+   ret = srt_setsockflag(sock, SRTO_RETRANSMITALGO, &algo, sizeof(algo));
+   assert(ret == 0);
+@@ -455,6 +464,7 @@ void exit_syntax() {
+   fprintf(stderr, "  -v                  Print the version and exit\n");
+   fprintf(stderr, "  -d <delay>          Audio-video delay in milliseconds\n");
+   fprintf(stderr, "  -s <streamid>       SRT stream ID\n");
++  fprintf(stderr, "  -p <passphrase>     SRT passphrase (10 to 79 characters)\n");
+   fprintf(stderr, "  -l <latency>        SRT latency in milliseconds\n");
+   fprintf(stderr, "  -r                  Reduced SRT packet size\n");
+   fprintf(stderr, "  -b <bitrate file>   Bitrate settings file, see below\n\n");
+@@ -579,7 +589,7 @@ int main(int argc, char** argv) {
+   char *stream_id = NULL;
+   srt_latency = DEF_SRT_LATENCY;
+ 
+-  while ((opt = getopt(argc, argv, "d:b:s:l:rv")) != -1) {
++  while ((opt = getopt(argc, argv, "d:b:s:p:l:rv")) != -1) {
+     switch (opt) {
+       case 'b':
+         bitrate_filename = optarg;
+@@ -594,6 +604,13 @@ int main(int argc, char** argv) {
+       case 's':
+         stream_id = optarg;
+         break;
++      case 'p':
++        if (strlen(optarg) < 10 || strlen(optarg) > 79) {
++          fprintf(stderr, "The SRT passphrase must be 10 to 79 characters\n\n");
++          exit_syntax();
++        }
++        srt_passphrase = optarg;
++        break;
+       case 'l':
+         srt_latency = strtol(optarg, NULL, 10);
+         if (srt_latency < MIN_SRT_LATENCY || srt_latency > MAX_SRT_LATENCY) {
+-- 
+2.47.3
+

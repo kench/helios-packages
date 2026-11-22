@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: helios-packages <helios-packages@invalid>
+Date: Sat, 21 Nov 2026 21:23:40 -0800
+Subject: [PATCH] mppdec: pass the crop meta as a GstMeta
+
+gst_buffer_remove_meta() takes a GstMeta *, and crop is a
+GstVideoCropMeta *. GCC 14 makes incompatible pointer types an error, so
+the plugin did not build on Debian Trixie. Pass its GstMeta member.
+---
+ gst/rockchipmpp/gstmppdec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gst/rockchipmpp/gstmppdec.c b/gst/rockchipmpp/gstmppdec.c
+index b950073..78f37a9 100644
+--- a/gst/rockchipmpp/gstmppdec.c
++++ b/gst/rockchipmpp/gstmppdec.c
+@@ -857,7 +857,7 @@ gst_mpp_dec_rga_convert (GstVideoDecoder * decoder, MppFrame mframe,
+ 
+   if (crop && ret) {
+     // We've already cropped the frame with RGA, remove the crop meta
+-    gst_buffer_remove_meta(buffer, crop);
++    gst_buffer_remove_meta(buffer, &crop->meta);
+   }
+ 
+   return ret;
+-- 
+2.47.3
+

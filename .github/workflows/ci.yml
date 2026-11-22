@@ -62,6 +62,11 @@ jobs:
           # -x follows sourced files, such as each package's package.env.
           shellcheck -x --severity=style $scripts
 
+      # helios-belacoder and helios-ceracoder build with one script, kept in both folders so each
+      # package's folder holds its whole recipe.
+      - name: The encoder packages share their build script
+        run: cmp helios-belacoder/build.sh helios-ceracoder/build.sh
+
   # Packages whose folder changed in the PR, or all of them when the shared build changed.
   changed:
     name: Changed packages

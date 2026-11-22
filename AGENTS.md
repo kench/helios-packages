@@ -10,8 +10,13 @@ Project Status and Handoff"; the boards are in "Hardware Deployment Information"
 
 - `helios-srtla-send` (irlserver srtla_send 4.1.0, MIT) is packaged and published (`4.1.0-1`).
 - `helios-ffmpeg-rk3588` (FFmpeg 9.0.2 + ffmpeg-rockchip, MPP and RGA static, x264, SRT,
-  RTMPS): the recipe builds in CI on `ubuntu-24.04-arm`; not released until it's verified on the
-  Orange Pi (README: "helios-ffmpeg-rk3588").
+  RTMPS): verified on the Orange Pi and released (`9.0.2-1`, component `rk3588`).
+- Adaptive bitrate (Notion: "Helios - Adaptive Bitrate Spike"): `helios-gst-rockchip-rk3588`
+  (BELABOX gstreamer-rockchip, MPP and RGA static, plugin in `/usr/lib/helios-gst/gstreamer-1.0`),
+  `helios-belacoder` and `helios-ceracoder` (with an SRT passphrase patch; ceracoder also sets the
+  encoder's `bps` or `bitrate` property). Their builds smoke-test an SRT stream with a
+  passphrase and a SIGHUP. **`helios-belacoder/build.sh` and `helios-ceracoder/build.sh` are the
+  same file: change both** (`cmp` them).
 - Publishing works end to end in local tests: `.github/workflows/release.yml` on tags
   `<package>/<version>`, `.github/scripts/build-apt-repo.sh` for the `trixie` suite, signed with
   this repository's own key (`APT_SIGNING_KEY`, fingerprint
