@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: helios-packages <helios-packages@invalid>
+Date: Sat, 21 Nov 2026 21:51:08 -0800
+Subject: [PATCH] mppdec, mppenc: rename the debug categories MPP also defines
+
+mpp_dec_debug and mpp_enc_debug are global variables in Rockchip MPP too
+(mpp/codec/mpp_dec.c and mpp_enc_v2.c). With MPP linked in statically the
+linker finds two definitions of each. Prefix the plugin's with gst_.
+---
+ gst/rockchipmpp/gstmppdec.c | 2 +-
+ gst/rockchipmpp/gstmppenc.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/gst/rockchipmpp/gstmppdec.c b/gst/rockchipmpp/gstmppdec.c
+index 78f37a9..1f12d06 100644
+--- a/gst/rockchipmpp/gstmppdec.c
++++ b/gst/rockchipmpp/gstmppdec.c
+@@ -29,7 +29,7 @@
+ #include "gstmppallocator.h"
+ #include "gstmppdec.h"
+ 
+-#define GST_CAT_DEFAULT mpp_dec_debug
++#define GST_CAT_DEFAULT gst_mpp_dec_debug
+ GST_DEBUG_CATEGORY (GST_CAT_DEFAULT);
+ 
+ #define parent_class gst_mpp_dec_parent_class
+diff --git a/gst/rockchipmpp/gstmppenc.c b/gst/rockchipmpp/gstmppenc.c
+index 74a7bf4..68686a8 100644
+--- a/gst/rockchipmpp/gstmppenc.c
++++ b/gst/rockchipmpp/gstmppenc.c
+@@ -31,7 +31,7 @@
+ #include "gstmppallocator.h"
+ #include "gstmppenc.h"
+ 
+-#define GST_CAT_DEFAULT mpp_enc_debug
++#define GST_CAT_DEFAULT gst_mpp_enc_debug
+ GST_DEBUG_CATEGORY (GST_CAT_DEFAULT);
+ 
+ #define parent_class gst_mpp_enc_parent_class
+-- 
+2.47.3
+

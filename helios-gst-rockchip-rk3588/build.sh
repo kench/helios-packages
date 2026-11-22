@@ -78,7 +78,7 @@ PKG_CONFIG_PATH=$DEPS/lib/pkgconfig meson setup "$WORK/gst" "$SRC/gst" \
     -Drockchipmpp=enabled -Drga=enabled -Drkximage=disabled -Dkmssrc=disabled \
     -Dpackage-name="$NAME" -Dpackage-origin="https://github.com/kench/helios-packages" \
     >"$WORK/meson.log" 2>&1 || { tail -40 "$WORK/meson.log"; exit 1; }
-ninja -C "$WORK/gst" -j "$JOBS" >"$WORK/ninja.log" 2>&1 || { grep -E "error|FAILED" "$WORK/ninja.log" | head -20; exit 1; }
+ninja -C "$WORK/gst" -j "$JOBS" >"$WORK/ninja.log" 2>&1 || { tail -40 "$WORK/ninja.log"; exit 1; }
 DESTDIR=$STAGE ninja -C "$WORK/gst" install >/dev/null
 plugin=$STAGE$PLUGIN_DIR/libgstrockchipmpp.so
 # Only the MPP plugin (kmssrc and rkximage are off).
