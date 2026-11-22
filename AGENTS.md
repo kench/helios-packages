@@ -48,7 +48,9 @@ and `BUILD_DEPS` for container builds; `BUILD_TOOLS=zigbuild` for host Rust buil
 executable `build.sh [OUT_DIR]` that verifies every upstream commit, builds, checks the result
 and writes `<package>_<version>_<arch>.deb`, plus `<package>_<version>_source.tar.xz` for GPL
 packages (published next to it). Build with `.github/scripts/build-package.sh <package>`. The
-release tag is `<package>/<version>`. Never publish a version twice with different contents.
+release tag is `<package>/<version>`, so a version can't contain `~` (not allowed in git refs): for
+an upstream without releases use `0.0+git<date>.<hash>-1`. Never publish a version twice with
+different contents.
 
 ## Targets
 
