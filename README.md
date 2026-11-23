@@ -12,7 +12,6 @@ next to the `helios` package itself.
 | `helios-belacoder` | any arm64 | [BELABOX/belacoder](https://github.com/BELABOX/belacoder) (GPL-3.0), the GStreamer SRT encoder with adaptive bitrate, as `/usr/bin/belacoder`; plus `-p` for an SRT passphrase |
 | `helios-ceracoder` | any arm64 | [ceralive/ceracoder](https://github.com/ceralive/ceracoder) (GPL-3.0), belacoder's fork with a choice of bitrate algorithms, as `/usr/bin/ceracoder`; plus `-p`, and setting the bitrate through the encoder's `bps` or `bitrate` property (BELABOX's plugin and `x264enc` have `bitrate`) |
 | `helios-srtla-send` | any arm64 | irlserver [srtla_send](https://github.com/irlserver/srtla_send) (MIT), the SRTLA bonding sender, as `/usr/bin/srtla_send`. **Packaged** (`4.1.0-1`) |
-| `helios-srtla` | any arm64 | BELABOX srtla (`srtla_send`, `srtla_rec`), if still needed; its `srtla_send` would install aside, under `/usr/lib/helios-srtla/` |
 
 ## Status
 

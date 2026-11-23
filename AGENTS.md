@@ -2,8 +2,8 @@
 
 helios-packages builds the board-specific software Helios devices need as Debian packages and
 publishes them to the Helios APT repository (helios-cloud's `AptRepository` stack), next to the
-`helios` package that kench/helios publishes. `README.md` has the plan: `helios-ffmpeg-rpi5`,
-`helios-ffmpeg-rk3588` and `helios-srtla`. Current status is in the Notion page "Helios -
+`helios` package that kench/helios publishes. `README.md` lists the packages and what's planned
+(`helios-ffmpeg-rpi5`). Current status is in the Notion page "Helios -
 Project Status and Handoff"; the boards are in "Hardware Deployment Information".
 
 ## Status (2026-11-21)
@@ -28,9 +28,8 @@ Next:
 1. `helios-ffmpeg-rpi5`: bring over the build from kench/raspberry-pi-5-tools (FFmpeg 9.0.2
    with the Raspberry Pi patches, x264, SRT, plus GnuTLS for RTMPS like the RK3588 build) the
    same way as `helios-ffmpeg-rk3588`: native arm64 in `debian:trixie`, `/usr/lib/helios-ffmpeg`.
-2. `helios-ffmpeg-rk3588`: verify on the Orange Pi, then release `helios-ffmpeg-rk3588/9.0.2-1`;
-   boards with an RK3588 add the `rk3588` component.
-3. BELABOX srtla (`helios-srtla`) only if it's still wanted next to irlserver's sender.
+2. BELABOX srtla isn't packaged (owner, 2026-11-21): the boards send with irlserver's
+   `srtla_send` (`helios-srtla-send`).
 
 ## FFmpeg build flags
 
